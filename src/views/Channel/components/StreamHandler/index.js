@@ -21,7 +21,7 @@ const options = {
   appId: "4c61de5fd1b94e2baa5affde8aa50c9f",
   channel: "test",
   token:
-    "007eJxTYBD+vcrnvPT27a5/roSJ20hPYm5fU/1Bo67zwPnSvevPH1VWYDBJNjNMSTVNSzFMsjRJNUpKTDRNTEtLSbUAMgySLdNSKvcnNwQyMnD+V2VghEIQn4WhJLW4hIEBANWFIaQ==",
+    "007eJxTYDDN3xsqZKA0V6g4emHx02ipSv2brq/aexb2vWbeVrL9ba4Cg0mymWFKqmlaimGSpUmqUVJiomliWlpKqgWQYZBsmXbk4oHkhkBGhs7VDkyMDBAI4rMwlKQWlzAwAABYwiEI",
   uid: "123xxx",
 };
 
