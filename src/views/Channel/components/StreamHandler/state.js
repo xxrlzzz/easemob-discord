@@ -12,12 +12,18 @@ class State {
     this.gain_node = null;
     this.next_start_time = 0;
     this.last_tick = 0;
+    this.mute = false;
     this.setup_audio();
+    console.log("[NES]: create state");
   }
 
   load_rom(rom) {
     this.nes = wasm.WebNes.new(rom, "canvas", this.sample_rate);
     this.run();
+  }
+
+  toggleMute() {
+    this.mute = !this.mute;
   }
 
   setup_audio() {
@@ -62,6 +68,9 @@ class State {
 
     const audioBuffer = this.get_audio_buffer();
     this.nes.audio_callback(this.buffer_size, audioBuffer.getChannelData(0));
+    if (this.mute) {
+      return;
+    }
     const source = this.audio_ctx.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(this.gain_node).connect(this.audio_ctx.destination);

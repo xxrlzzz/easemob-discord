@@ -14,10 +14,12 @@ axios.defaults.timeout = 100000;
 axios.interceptors.request.use(
     (config) => {
         config.data = JSON.stringify(config.data);
-        config.headers = {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`,
-        };
+        if (!config.headers.Authorization) {
+            config.headers = {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`,
+            };
+        }
         return config;
     },
     (error) => {

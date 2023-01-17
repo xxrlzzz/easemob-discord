@@ -1,33 +1,22 @@
 import AgoraRTC from "agora-rtc-sdk-ng";
 import React, { memo, useState, useEffect, useRef, useMemo } from "react";
-import { createMsg, deliverMsg } from "@/utils/common";
-import { CHAT_TYPE } from "@/consts";
-import { Spin, FloatButton, message, Upload, Button } from "antd";
+import { CMD_START_STREAM } from "@/utils/stream";
+import { Spin } from "antd";
 import { connect } from "react-redux";
-import {
-  CustomerServiceOutlined,
-  DesktopOutlined,
-  VideoCameraOutlined,
-  VideoCameraAddOutlined,
-  VideoCameraFilled,
-  UploadOutlined,
-} from "@ant-design/icons";
-import * as wasm_emulator from "@/pkg";
-import mario_url from "@/assets/mario.nes";
-import State from "./state";
+import RemoteStreamHandler from "./remote_stream";
+import LocalStreamHandler from "./local_stream";
+import mqtt from "./use_mqtt";
 
 // https://console.agora.io/project/hhBXhrfod
 const options = {
-  appId: "4c61de5fd1b94e2baa5affde8aa50c9f",
-  channel: "test",
+  appId:
+    process.env.REACT_APP_AGORA_APPID || "4c61de5fd1b94e2baa5affde8aa50c9f",
+  channel: process.env.REACT_APP_AGORA_CHANNEL || "test",
   token:
-    "007eJxTYDDN3xsqZKA0V6g4emHx02ipSv2brq/aexb2vWbeVrL9ba4Cg0mymWFKqmlaimGSpUmqUVJiomliWlpKqgWQYZBsmXbk4oHkhkBGhs7VDkyMDBAI4rMwlKQWlzAwAABYwiEI",
-  uid: "123xxx",
+    process.env.REACT_APP_AGORA_TOKEN ||
+    "007eJxTYLi6ZjvXmpITN0/Jfnr15uW123xnVlobRTJeDOO7wLHhhji7AoNJsplhSqppWophkqVJqlFSYqJpYlpaSqoFkGGQbJmWHHcouSGQkeGc12tWJgZGMATxWRhKUotLGBiY4CJsDIZGxhUVFQDFtCXM",
+  uid: process.env.REACT_APP_AGORA_UID || "123xxx",
 };
-
-const CMD_START_STREAM = "start";
-const CMD_END_STREAM = "end";
-const state = new State();
 
 const StreamHandler = (props) => {
   const { userInfo, messageInfo, channelId, enableLocalVoice = false } = props;
@@ -43,48 +32,48 @@ const StreamHandler = (props) => {
   const [enableRemoteVoice, setEnableRemoteVoice] = useState(false);
   const [enableRemoteVideo, setEnableRemoteVideo] = useState(false);
 
-  const firstMessage = useMemo(() => {
+  // 第一条 stream 消息, 用于判断直播状态
+  const firstStreamMessage = useMemo(() => {
     return messageInfo?.list?.find(
       (item) => item.type === "custom" && item?.ext?.type === "stream"
     );
   }, [messageInfo]);
+  // 第一条 co_play 消息, 用于判断协同游戏状态
+  const firstCoPlayMessage = useMemo(() => {
+    return messageInfo?.list?.find(
+      (item) => item.type === "custom" && item?.ext?.type === "co_play"
+    );
+  }, [messageInfo]);
 
-  const stateRef = useRef(new State());
-
+  // 是否有直播
   const hasRemoteStream =
-    firstMessage?.ext?.status === CMD_START_STREAM &&
-    firstMessage?.ext?.user !== userInfo?.username;
+    firstStreamMessage?.ext?.status === CMD_START_STREAM &&
+    firstStreamMessage?.ext?.user !== userInfo?.username;
+  // 本地直播状态
   const [localStreaming, setLocalStreaming] = useState(
-    firstMessage?.ext?.status === CMD_START_STREAM &&
-      firstMessage?.ext?.user === userInfo?.username
+    firstStreamMessage?.ext?.status === CMD_START_STREAM &&
+      firstStreamMessage?.ext?.user === userInfo?.username
+  );
+  // 是否有协同游戏
+  const hasCoPlay =
+    hasRemoteStream &&
+    firstCoPlayMessage?.ext?.status === CMD_START_STREAM &&
+    firstCoPlayMessage?.ext?.user !== userInfo?.username;
+  // 本地协同游戏状态
+  const [coPlaying, setCoPlaying] = useState(
+    hasRemoteStream &&
+      firstCoPlayMessage?.ext?.status === CMD_START_STREAM &&
+      firstCoPlayMessage?.ext?.user === userInfo?.username
   );
 
   // console.log("[Stream] localStreaming", localStreaming);
-
+  // console.log("option is", options);
   // console.log("msg", messageInfo);
   // console.log("uinfo", userInfo);
   // console.log("first msg", firstMessage);
   // console.log("enable voice", enableLocalVoice);
 
-  const sendStreamMessage = (content) => {
-    let msg = createMsg({
-      chatType: CHAT_TYPE.groupChat,
-      type: "custom",
-      to: channelId,
-      ext: {
-        type: "stream",
-        ...content,
-      },
-    });
-    deliverMsg(msg)
-      .then(() => {
-        console.log("发送成功");
-      })
-      .catch((e) => {
-        console.log(e);
-      });
-  };
-
+  // 推流相关逻辑
   useEffect(() => {
     AgoraRTC.setLogLevel(3);
     const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
@@ -105,6 +94,7 @@ const StreamHandler = (props) => {
       await client.subscribe(user, mediaType);
       console.log("[Stream] subscribe success on user ", user);
       if (mediaType === "video") {
+        // 获取直播流
         if (remoteUser && remoteUser.uid !== user.uid) {
           console.error(
             "already in a call, can not subscribe another user ",
@@ -119,6 +109,7 @@ const StreamHandler = (props) => {
         setRemoteUser(user);
       }
       if (mediaType === "audio") {
+        // 获取音频流
         const remoteAudioTrack = user.audioTrack;
         if (remoteVoices.findIndex((item) => item.uid === user.uid) == -1) {
           if (enableRemoteVoice) {
@@ -133,10 +124,15 @@ const StreamHandler = (props) => {
     });
 
     client.on("user-unpublished", (user) => {
+      // 用户离开, 去除流信息
       console.log("[Stream] user-unpublished", user);
       removeUserStream(user);
     });
     setRtcClient(client);
+    return () => {
+      client.leave();
+      setRtcClient(null);
+    };
   }, []);
 
   // Handle local voice stream.
@@ -160,44 +156,24 @@ const StreamHandler = (props) => {
     };
   }, [rtcClient, enableLocalVoice]);
 
+  // coplay data channel
+  const mqttClient = useMemo(() => {
+    const topic = `/${channelId}/co_play`;
+    mqtt.isClient = !localStreaming;
+    mqtt.setTopic(topic);
+    mqtt.setUname(userInfo?.username);
+    return mqtt;
+  }, [channelId, userInfo?.username]);
+
   useEffect(() => {
-    if (!localStreaming || !rtcClient) {
-      return;
-    }
-    // debugger;
-    let localVideoStream = AgoraRTC.createCustomVideoTrack({
-      mediaStreamTrack: canvasEle.current.captureStream(30).getVideoTracks()[0],
-    });
-    rtcClient.publish(localVideoStream).then(() => {
-      sendStreamMessage({
-        user: userInfo?.username,
-        status: CMD_START_STREAM,
-      });
-      // setLocalVideoStream(localVideoStream);
-      message.success({
-        content: "start streaming",
-        style: { color: "black" },
-      });
-    });
     return () => {
-      if (localVideoStream) {
-        rtcClient.unpublish(localVideoStream);
-        localVideoStream.stop();
-        // setLocalVideoStream(null);
-        sendStreamMessage({
-          user: userInfo?.username,
-          status: CMD_END_STREAM,
-        });
-        message.info({
-          content: "stop streaming",
-          style: { color: "black" },
-        });
-      }
+      mqttClient?.disconnect();
     };
-  }, [rtcClient, localStreaming]);
+  });
 
   const leaveChannel = () => {
     setLocalStreaming(false);
+    setCoPlaying(false);
     rtcClient?.leave();
   };
 
@@ -206,6 +182,13 @@ const StreamHandler = (props) => {
       return;
     }
     setLocalStreaming(!localStreaming);
+  };
+
+  const toggleCoPlay = () => {
+    if (!hasRemoteStream) {
+      return;
+    }
+    setCoPlaying(!coPlaying);
   };
 
   const removeUserStream = (user) => {
@@ -251,125 +234,39 @@ const StreamHandler = (props) => {
   };
 
   useEffect(() => {
-    if (!canvasEle || hasRemoteStream) {
-      return;
-    }
-
-    wasm_emulator.wasm_main();
-    fetch(mario_url, {
-      headers: { "Content-Type": "application/octet-stream" },
-    })
-      .then((response) => response.arrayBuffer())
-      .then((data) => {
-        let mario = new Uint8Array(data);
-        stateRef.current.load_rom(mario);
-      });
-  }, [canvasEle, hasRemoteStream]);
-
-  const uploadRom = (file) => {
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsArrayBuffer(file);
-      reader.onload = () => {
-        let res = reader.result;
-        let rom = new Uint8Array(res);
-        stateRef.current.load_rom(rom, "canvas");
-      };
-    });
-    // if (info.file.status === 'done') {
-    //   debugger
-    //   message.success({content: `${info.file.name} file uploaded successfully`,
-    //   style: { color: "black"}});
-    // } else if (info.file.status === 'error') {
-    //   message.error({content: `${info.file.name} file upload failed.`, style: { color: "black"}});
-    // }
-  };
-
-  useEffect(() => {
     return () => {
       leaveChannel();
     };
   }, []);
 
-  const renderLocalStream = () => {
-    return (
-      <div style={{ height: "100%" }}>
-        <canvas
-          id="canvas"
-          style={{ width: "100%", height: "90%" }}
-          ref={canvasEle}
-        />
-        {/* <div id="game" width="100%" height="90%" ref={canvasEle}></div> */}
-        <Upload beforeUpload={uploadRom} maxCount="1">
-          <Button icon={<UploadOutlined />}>Click to choose rom</Button>
-        </Upload>
-      </div>
-    );
-  };
-  const renderRemoteStream = () => {
-    return (
-      <div style={{ height: "100%" }}>
-        <div
-          id="remote-player"
-          style={{
-            width: "100%",
-            height: "90%",
-            border: "1px solid #fff",
-          }}
-          ref={localVideoEle}
-        />
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            marginTop: "10px",
-          }}
-        >
-          <span style={{ color: "#0ECD0A" }}>{firstMessage?.ext?.user}</span>
-          &nbsp; is playing{" "}
-        </div>
-      </div>
-    );
-  };
-
-  const renderFloatButton = () => {
-    return (
-      <FloatButton.Group
-        icon={<DesktopOutlined />}
-        trigger="click"
-        style={{ left: "380px" }}
-      >
-        <FloatButton
-          onClick={toggleRemoteVoice}
-          icon={<CustomerServiceOutlined />}
-          tooltip={<div>加入/退出语音频道</div>}
-        />
-        {hasRemoteStream && (
-          <FloatButton
-            onClick={toggleRemoteVideo}
-            icon={<VideoCameraAddOutlined />}
-            tooltip={<div>观看/停止观看直播</div>}
-          />
-        )}
-        {!hasRemoteStream && (
-          <FloatButton
-            onClick={toggleLocalGameStream}
-            icon={
-              localStreaming ? <VideoCameraFilled /> : <VideoCameraOutlined />
-            }
-            tooltip={<div>{localStreaming ? "停止直播" : "开始直播"}</div>}
-          />
-        )}
-      </FloatButton.Group>
-    );
-  };
   return (
     <>
       {!connectStatus && <Spin tip="Loading" size="large" />}
-      <div style={{ height: "100%" }}>
-        {renderFloatButton()}
-        {hasRemoteStream ? renderRemoteStream() : renderLocalStream()}
-      </div>
+      {hasRemoteStream ? (
+        <RemoteStreamHandler
+          remoteUser={firstStreamMessage?.ext?.user}
+          localVideoRef={localVideoEle}
+          toggleRemoteVideo={toggleRemoteVideo}
+          toggleRemoteVoice={toggleRemoteVoice}
+          channelId={channelId}
+          userInfo={userInfo}
+          rtcClient={rtcClient}
+          coPlaying={coPlaying}
+          toggleCoPlay={toggleCoPlay}
+          mqttClient={mqttClient}
+        />
+      ) : (
+        <LocalStreamHandler
+          localStreaming={localStreaming}
+          canvasRef={canvasEle}
+          toggleRemoteVoice={toggleRemoteVoice}
+          toggleLocalGameStream={toggleLocalGameStream}
+          rtcClient={rtcClient}
+          userInfo={userInfo}
+          channelId={channelId}
+          mqttClient={mqttClient}
+        />
+      )}
     </>
   );
 };
