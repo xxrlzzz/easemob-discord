@@ -123,8 +123,12 @@ rtc功能是基于 Agora.io 的 SDK 实现的.
 
 基于[RustNESEmulator](https://github.com/xxrlzzz/RustNESEmulator)项目, 将Rust编写的nes模拟器通过wasm编译到web端. 渲染结果输入到canvas中.
 
-TODO: 1. 支持双人联机(观看端发送控制数据, 实现联机), 2.游戏视频流优化(分辨率适配), 3. 房间流管理优化(在线流发现)
+TODO: 1. 双人联机, 可以部署公网(目前使用rtc, 依赖本地websocket信令服务), 2. 房间流管理优化(在线流发现)
 
 效果图
 
 ![image](./public/result.png)
+
+<video id="video" controls="" preload="none" poster="封面" src="./public/coplay.mp4" >
+      <source id="mp4" src="./public/coplay.mp4" type="coplay">
+</videos>

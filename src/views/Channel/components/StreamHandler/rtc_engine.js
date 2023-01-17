@@ -15,6 +15,7 @@ class RTCEngine {
   init() {
     this._peerConnection = null;
     this.peerId = null;
+    this.type = "receiver";
     this._onIceCandidate = this._onIceCandidate.bind(this);
     this.recvDataChannel = this.recvDataChannel.bind(this);
   }
@@ -98,7 +99,7 @@ class RTCEngine {
   _initWebSockets(wsUrl) {
     this._ws = new WebSocket(wsUrl);
     this._ws.onopen = () => {
-      console.log("[ws] open user id:", userId);
+      console.log("[RTC] open user id:", userId);
       this._ws.send(
         JSON.stringify({
           type: SIGNAL_TYPE_JOIN,
@@ -110,14 +111,14 @@ class RTCEngine {
   }
   // new peer join, create offer
   _onNewPeer(signal) {
-    console.log("new-peer", signal);
+    console.log("[RTC] new-peer", signal);
     this.peerId = signal.peerId;
     this._createPeerConnection();
     this._peerConnection
       .createOffer()
       .then((offer) => {
         this._peerConnection.setLocalDescription(offer);
-        console.log("got offer", offer);
+        console.log("[RTC] got offer", offer);
         return offer;
       })
       .then((offer) => {
@@ -134,7 +135,7 @@ class RTCEngine {
   }
   // peer has leave, reset peer connection
   _onPeerLeave(signal) {
-    console.log("peer-leave", signal);
+    console.log("[RTC] peer-leave", signal);
     this._peerConnection.close();
     if (this.remoteVideo) {
       this.remoteStream.getTracks().forEach((track) => {
@@ -147,7 +148,7 @@ class RTCEngine {
   // got remote offer
   // set remote description and send answer
   _onRemoteOffer(message) {
-    console.log("remote offer ", message);
+    console.log("[RTC] remote offer ", message);
     this.peerId = message.userId;
     this._createPeerConnection();
     this._peerConnection
@@ -163,20 +164,20 @@ class RTCEngine {
           answer: this._peerConnection.localDescription,
         };
         this._ws.send(JSON.stringify(answerInfo));
-        console.log("send answer", answerInfo);
+        console.log("[RTC] send answer", answerInfo);
       })
       .catch(console.error);
   }
   // remote answer
   _onRemoteAnswer(message) {
-    console.log("remote answer ", message);
+    console.log("[RTC] remote answer ", message);
     this._peerConnection
       .setRemoteDescription(new RTCSessionDescription(message.answer))
       .catch(console.error);
   }
   // local ice candidate
   _onIceCandidate(event) {
-    console.log("on ice candidate", event);
+    console.log("[RTC] on ice candidate", event);
     if (!event.candidate) return;
     this._ws.send(
       JSON.stringify({
@@ -189,7 +190,7 @@ class RTCEngine {
   }
   // remote ice candidate
   _onRemoteIceCandidate(event) {
-    console.log("on remote ice candidate", event);
+    console.log("[RTC] on remote ice candidate", event);
     if (!event.candidate) return;
     this._createPeerConnection();
     this._peerConnection.addIceCandidate(event.candidate);
@@ -202,7 +203,7 @@ class RTCEngine {
 
   recvDataChannel() {
     this._peerConnection.ondatachannel = (event) => {
-      console.log("on data channel", event);
+      console.log("[RTC] on data channel", event);
       const channel = event.channel;
       channel.onopen = (event) => {
         console.log("channel open", event);
@@ -218,6 +219,10 @@ engine.init();
 engine._initWebSockets("ws://localhost:8099");
 RTCEngine.instance = engine;
 let channel = engine.createDataChannel("input");
+
+channel.onopen = () => {
+  console.log("data channel open");
+};
 RTCEngine.channel = channel;
 
 export default RTCEngine;

@@ -30,26 +30,21 @@ const RemoteStreamHandler = (props) => {
     rtcClient,
     hasCoPlay,
     toggleCoPlay,
-    mqttClient,
   } = props;
 
   const lastData = useRef(null);
 
+  RTCEngine.instance.type = "receiver";
+
   const sendInput = useCallback(() => {
-    if (!mqttClient) {
-      console.log("[coplay] mqtt not connected");
-      return;
-    }
     const rawdata = wasm_emulator.keyboard_status();
-    const data = JSON.stringify(rawdata);
-    if (lastData.current === data) {
+    if (lastData.current === rawdata) {
       return;
     }
-    lastData.current = data;
-    console.log("[coplay] send input", data, lastData.current);
-    // mqttClient.send(data);
+    lastData.current = rawdata;
+    console.log("[coplay] send input", rawdata);
     RTCEngine.channel.send(rawdata);
-  }, [mqttClient]);
+  }, []);
 
   useEffect(() => {
     // 协同游戏, 2p
@@ -110,8 +105,7 @@ const RemoteStreamHandler = (props) => {
         <Button
           icon={<AudioMutedOutlined />}
           onClick={() => {
-            // mqttClient.send("[37]");
-            RTCEngine.channel.send([37]);
+            RTCEngine.channel.send([37, 65]);
           }}
         >
           send test msg left.
@@ -119,8 +113,7 @@ const RemoteStreamHandler = (props) => {
         <Button
           icon={<AudioMutedOutlined />}
           onClick={() => {
-            // mqttClient.send("[39]");
-            RTCEngine.channel.send([39]);
+            RTCEngine.channel.send([39, 68]);
           }}
         >
           send test msg right.

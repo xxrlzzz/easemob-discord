@@ -28,20 +28,12 @@ const LocalStreamHandler = (props) => {
     rtcClient,
     userInfo,
     channelId,
-    mqttClient,
   } = props;
   // 模拟器 state
   const stateRef = useRef(new State());
 
-  mqttClient.onMessage = (msg) => {
-    // TODO: fix mqtt can't recv message, and connection failed.
-    try {
-      msg = JSON.parse(msg);
-      let keys = msg.map((x) => parseInt(x));
-      wasm_emulator.update_remote_keyboard_state(keys);
-      console.log("recv", keys);
-    } catch (e) {}
-  };
+  RTCEngine.instance.type = "sender";
+
   RTCEngine.instance.onDataChannelMessage = (event) => {
     let keys = event.data.split(",").map((x) => parseInt(x));
     wasm_emulator.update_remote_keyboard_state(keys);
@@ -70,9 +62,12 @@ const LocalStreamHandler = (props) => {
     if (!localStreaming || !rtcClient) {
       return;
     }
+    let stream = canvasRef.current.captureStream(30);
     let localVideoStream = AgoraRTC.createCustomVideoTrack({
-      mediaStreamTrack: canvasRef.current.captureStream(30).getVideoTracks()[0],
+      mediaStreamTrack: stream.getVideoTracks()[0],
     });
+    console.log("height", canvasRef.current.height);
+    console.log("publishing local stream", localVideoStream);
     rtcClient.publish(localVideoStream).then(() => {
       sendStreamMessage(
         {
@@ -153,7 +148,9 @@ const LocalStreamHandler = (props) => {
       <div style={{ height: "100%" }}>
         <canvas
           id="canvas"
-          style={{ width: "100%", height: "90%" }}
+          style={{ width: 600, height: 500 }}
+          width="600"
+          height="500"
           ref={canvasRef}
         />
         <div
@@ -172,7 +169,7 @@ const LocalStreamHandler = (props) => {
           <Button
             icon={<AudioMutedOutlined />}
             onClick={() => {
-              mqttClient.send("hello");
+              RTCEngine.channel.send("hello");
             }}
           >
             send test msg.

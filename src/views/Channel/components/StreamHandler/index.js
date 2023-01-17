@@ -5,7 +5,6 @@ import { Spin } from "antd";
 import { connect } from "react-redux";
 import RemoteStreamHandler from "./remote_stream";
 import LocalStreamHandler from "./local_stream";
-import mqtt from "./use_mqtt";
 
 // https://console.agora.io/project/hhBXhrfod
 const options = {
@@ -156,21 +155,6 @@ const StreamHandler = (props) => {
     };
   }, [rtcClient, enableLocalVoice]);
 
-  // coplay data channel
-  const mqttClient = useMemo(() => {
-    const topic = `/${channelId}/co_play`;
-    mqtt.isClient = !localStreaming;
-    mqtt.setTopic(topic);
-    mqtt.setUname(userInfo?.username);
-    return mqtt;
-  }, [channelId, userInfo?.username]);
-
-  useEffect(() => {
-    return () => {
-      mqttClient?.disconnect();
-    };
-  });
-
   const leaveChannel = () => {
     setLocalStreaming(false);
     setCoPlaying(false);
@@ -253,7 +237,6 @@ const StreamHandler = (props) => {
           rtcClient={rtcClient}
           coPlaying={coPlaying}
           toggleCoPlay={toggleCoPlay}
-          mqttClient={mqttClient}
         />
       ) : (
         <LocalStreamHandler
@@ -264,7 +247,6 @@ const StreamHandler = (props) => {
           rtcClient={rtcClient}
           userInfo={userInfo}
           channelId={channelId}
-          mqttClient={mqttClient}
         />
       )}
     </>
