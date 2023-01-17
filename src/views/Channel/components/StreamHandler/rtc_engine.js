@@ -11,6 +11,8 @@ const USER_TYPE_RECEIVER = "receiver";
 
 var userId = Math.random().toString(36).substring(2, 9);
 
+const SignalServerUrl = process.env.REACT_APP_WS_HOST || "ws://localhost:8099";
+
 class RTCEngine {
   init() {
     this._peerConnection = null;
